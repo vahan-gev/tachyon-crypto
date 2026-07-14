@@ -1,0 +1,8 @@
+[package]
+name = "crypto"
+version = "0.1.0"
+edition = "2026"
+repo = "git+https://github.com/vahan-gev/tachyon-crypto"
+
+[build]
+native = ["native/ty_crypto.c"]

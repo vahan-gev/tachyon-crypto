@@ -1,0 +1,75 @@
+// crypto — SHA-256, HMAC-SHA256, base64, constant-time compare, CSPRNG,
+// PBKDF2 password hashing, and HS256 JWTs.
+// Self-contained C implementation (no OpenSSL); suitable for tokens, signing,
+// integrity checks, login credentials, and stateless auth.
+
+extern function ty_sha256_hex(s: string): string;
+extern function ty_hmac_sha256_hex(key: string, msg: string): string;
+extern function ty_b64_encode(s: string): string;
+extern function ty_b64_decode(s: string): string;
+extern function ty_ct_equal(a: string, b: string): int;
+extern function ty_random_hex(nbytes: long): string;
+extern function ty_pw_hash(password: string): string;
+extern function ty_pw_verify(password: string, encoded: string): int;
+extern function ty_jwt_sign(payload: string, secret: string): string;
+extern function ty_jwt_verify(token: string, secret: string): string;
+
+/// SHA-256 of `s`, lowercase hex.
+function sha256(s: string): string {
+    return ty_sha256_hex(s);
+}
+
+/// HMAC-SHA256(key, msg), lowercase hex — for signing tokens and webhooks.
+function hmacSha256(key: string, msg: string): string {
+    return ty_hmac_sha256_hex(key, msg);
+}
+
+/// Standard base64 (with padding).
+function base64Encode(s: string): string {
+    return ty_b64_encode(s);
+}
+
+/// Decode standard base64; invalid characters are skipped.
+function base64Decode(s: string): string {
+    return ty_b64_decode(s);
+}
+
+/// Timing-safe string comparison — use for secrets, tokens and signatures.
+function constantTimeEquals(a: string, b: string): bool {
+    return ty_ct_equal(a, b) == 1;
+}
+
+/// `n` cryptographically random bytes (1..32), hex-encoded — session ids, salts.
+function randomToken(nbytes: int): string {
+    return ty_random_hex(nbytes as long);
+}
+
+/// Hash a password for storage: PBKDF2-HMAC-SHA256 with a fresh random salt.
+/// Returns a self-describing string `pbkdf2_sha256$<iters>$<salt>$<hash>` —
+/// store it as-is; `passwordVerify` reads back everything it needs from it.
+/// The same password hashed twice gives different strings (the salt differs).
+function passwordHash(password: string): string {
+    return ty_pw_hash(password);
+}
+
+/// Check a password against a stored `passwordHash` string. Constant-time over
+/// the digest, so a wrong password and a wrong-length one take the same time.
+function passwordVerify(password: string, encoded: string): bool {
+    return ty_pw_verify(password, encoded) == 1;
+}
+
+/// Sign a JSON payload into a compact HS256 JWT: `header.payload.signature`.
+/// `secret` is the shared signing key — keep it out of the payload and out of
+/// source control. Put an `exp` (unix seconds) claim in the payload to expire it.
+function jwtSign(payloadJson: string, secret: string): string {
+    return ty_jwt_sign(payloadJson, secret);
+}
+
+/// Verify a JWT and return its payload JSON, or `null` if the signature does
+/// not match `secret` or the token's `exp` claim has passed. A returned payload
+/// is authentic: it was signed by someone holding the secret and is not expired.
+function jwtVerify(token: string, secret: string): string? {
+    let p = ty_jwt_verify(token, secret);
+    if (p.len() == 0L) { return null; }
+    return p;
+}

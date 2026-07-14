@@ -1,0 +1,88 @@
+@test
+function sha256KnownVectors(): void {
+    // NIST test vectors
+    assertEq(sha256(""),
+             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    assertEq(sha256("abc"),
+             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+    assertEq(sha256("The quick brown fox jumps over the lazy dog"),
+             "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592");
+}
+
+@test
+function hmacKnownVector(): void {
+    // RFC 4231 test case 2
+    assertEq(hmacSha256("Jefe", "what do ya want for nothing?"),
+             "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843");
+}
+
+@test
+function base64RoundTrip(): void {
+    assertEq(base64Encode("hello"), "aGVsbG8=");
+    assertEq(base64Encode("Tachyon!"), "VGFjaHlvbiE=");
+    assertEq(base64Decode("aGVsbG8="), "hello");
+    assertEq(base64Decode(base64Encode("round trip with spaces")),
+             "round trip with spaces");
+}
+
+@test
+function tokensAndCompare(): void {
+    const a = randomToken(16);
+    const b = randomToken(16);
+    assertEq(a.len(), 32L);            // 16 bytes -> 32 hex chars
+    assertEq(a != b, true);            // overwhelmingly likely
+    assertEq(constantTimeEquals(a, a), true);
+    assertEq(constantTimeEquals(a, b), false);
+    assertEq(constantTimeEquals("secret", "secrer"), false);
+}
+
+@test
+function passwordHashing(): void {
+    let h = passwordHash("correct horse battery staple");
+    // self-describing: algorithm, iterations, salt, digest
+    assertEq(h.startsWith("pbkdf2_sha256$210000$"), true);
+    assertEq(passwordVerify("correct horse battery staple", h), true);
+    assertEq(passwordVerify("Correct Horse Battery Staple", h), false);  // wrong pw
+    assertEq(passwordVerify("", h), false);
+
+    // the salt is random, so the same password hashes to different strings,
+    // and each still verifies
+    let h2 = passwordHash("correct horse battery staple");
+    assertEq(h == h2, false);
+    assertEq(passwordVerify("correct horse battery staple", h2), true);
+
+    // a garbage stored hash never matches, never crashes
+    assertEq(passwordVerify("x", "not-a-real-hash"), false);
+    assertEq(passwordVerify("x", "pbkdf2_sha256$210000$$"), false);
+}
+
+@test
+function jwtRoundTrip(): void {
+    let secret = "your-256-bit-secret";
+    let token = jwtSign(`{"sub":"1234567890","name":"John Doe","iat":1516239022}`, secret);
+    // matches the canonical jwt.io HS256 example byte for byte
+    assertEq(token,
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9." +
+        "eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ." +
+        "SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c");
+
+    let payload = jwtVerify(token, secret);
+    assertEq(payload != null, true);
+    assertEq((payload ?? "").contains("John Doe"), true);
+
+    // a tampered token, or the wrong key, does not verify
+    assertEq(jwtVerify(token, "wrong-secret") == null, true);
+    assertEq(jwtVerify(token + "x", secret) == null, true);
+    assertEq(jwtVerify("garbage", secret) == null, true);
+}
+
+@test
+function jwtExpiry(): void {
+    let secret = "k";
+    // exp in the past -> rejected; exp in the future -> accepted
+    let expired = jwtSign(`{"sub":"a","exp":1000000000}`, secret);       // year 2001
+    assertEq(jwtVerify(expired, secret) == null, true);
+
+    let live = jwtSign(`{"sub":"a","exp":4102444800}`, secret);          // year 2100
+    assertEq(jwtVerify(live, secret) != null, true);
+}
